@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+    <element label="Server" max_length="40" name="x_bpin_net_atrium_server" type="collection">
+        <element label="Server Active" max_length="40" name="server_active" type="boolean"/>
+        <element display="true" label="Server Name" mandatory="true" max_length="50" name="server_name" type="string"/>
+    </element>
+</database>

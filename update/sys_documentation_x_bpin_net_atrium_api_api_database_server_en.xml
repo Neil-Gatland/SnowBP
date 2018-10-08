@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update>
+    <sys_documentation element="api_database_server" label="API Database Server" language="en" table="x_bpin_net_atrium_api">
+        <sys_documentation action="INSERT_OR_UPDATE">
+            <element>api_database_server</element>
+            <help/>
+            <hint/>
+            <label>API Database Server</label>
+            <language>en</language>
+            <name>x_bpin_net_atrium_api</name>
+            <plural>API Database Servers</plural>
+            <sys_class_name>sys_documentation</sys_class_name>
+            <sys_created_by>negel5</sys_created_by>
+            <sys_created_on>2018-09-26 08:59:43</sys_created_on>
+            <sys_id>e9de8a91db70eb804f73498039961992</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_name>API Database Server</sys_name>
+            <sys_package display_value="Import - Network (Atrium)" source="x_bpin_net_atrium">818273ecdbb0e7804f734980399619be</sys_package>
+            <sys_policy/>
+            <sys_scope display_value="Import - Network (Atrium)">818273ecdbb0e7804f734980399619be</sys_scope>
+            <sys_update_name>sys_documentation_x_bpin_net_atrium_api_api_database_server_en</sys_update_name>
+            <sys_updated_by>negel5</sys_updated_by>
+            <sys_updated_on>2018-09-26 08:59:43</sys_updated_on>
+            <url/>
+            <url_target/>
+        </sys_documentation>
+    </sys_documentation>
+</record_update>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update sys_domain="global" table="sys_app_application">
+    <sys_app_application action="INSERT_OR_UPDATE">
+        <active>true</active>
+        <category display_value="Custom Applications">e0355b31ef303000a61d5a3615c0fb78</category>
+        <description/>
+        <device_type>browser</device_type>
+        <hint/>
+        <name>targetDevices2</name>
+        <order>1000</order>
+        <roles>x_bpin_net_atrium.targetdevices2_user</roles>
+        <sys_class_name>sys_app_application</sys_class_name>
+        <sys_created_by>negel5</sys_created_by>
+        <sys_created_on>2018-10-04 14:32:23</sys_created_on>
+        <sys_domain>global</sys_domain>
+        <sys_domain_path>/</sys_domain_path>
+        <sys_id>a8b7e040dbc5abc04f73498039961918</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>targetDevices2</sys_name>
+        <sys_overrides/>
+        <sys_package display_value="Import - Network (Atrium)" source="x_bpin_net_atrium">818273ecdbb0e7804f734980399619be</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Import - Network (Atrium)">818273ecdbb0e7804f734980399619be</sys_scope>
+        <sys_update_name>sys_app_application_a8b7e040dbc5abc04f73498039961918</sys_update_name>
+        <sys_updated_by>negel5</sys_updated_by>
+        <sys_updated_on>2018-10-04 14:32:23</sys_updated_on>
+        <title>targetDevices2</title>
+        <view_name/>
+    </sys_app_application>
+</record_update>

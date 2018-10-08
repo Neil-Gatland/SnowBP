@@ -1,0 +1,900 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sysauto_script">
+    <sysauto_script action="INSERT_OR_UPDATE">
+        <active>false</active>
+        <condition/>
+        <conditional>false</conditional>
+        <name>Atrium API Import</name>
+        <run_as display_value="Gatland, Neil (DEVOTEAM)">cebf6f57db7393804f734980399619ce</run_as>
+        <run_as_tz/>
+        <run_dayofmonth>1</run_dayofmonth>
+        <run_dayofweek>1</run_dayofweek>
+        <run_period/>
+        <run_start>2018-09-26 10:29:38</run_start>
+        <run_time>1970-01-01 00:00:00</run_time>
+        <run_type>daily</run_type>
+        <script><![CDATA[// ------------------------------------------
+// Development Notes
+// ------------------------------------------
+// useful comment to get round jshint error where the maximum warning messages
+// jshint maxerr:1000 
+
+var atrium_api_import_message_count = 0;
+var atrium_api_import_warnings = '\n<WARNINGS>';
+var atrium_api_import_item_class = [];
+var atrium_api_import_manufacturer_alias = [];
+var atrium_api_import_network_host = [];
+
+main();
+
+function main () {
+	
+	try {
+		
+		// Issue start message and check process completed normally last time
+		gs.info(formattedMessage('Start'));	
+		var grAppLog = new GlideRecord('x_bpin_net_atrium_applog');
+		grAppLog.orderByDesc('sys_created_on');
+		grAppLog.setLimit(1);
+		grAppLog.query();
+		if (grAppLog.next()) {
+			if (grAppLog.applog_handshake==true) {
+				throw{name : 'Synch Failure', message : 'Previous run incomplete' };
+			}
+		}
+
+		// Check there is only one job to be performed
+		var jobCount = 0;
+		var count = new GlideAggregate('x_bpin_net_atrium_server');
+		count.addQuery('server_active',true);
+		count.addAggregate('COUNT');
+		count.query();
+		if (count.next()) {
+			jobCount = count.getAggregate('COUNT');
+		}
+		if (jobCount>1) {
+			throw{name : 'Set-up Failure', message : 'More than one active job' };
+		} else if (jobCount==0) {
+			throw{name : 'Set-up Failure', message : 'No active job' };
+		}
+		
+		// Store server name and sys id for active job
+		var grServer = new GlideRecord('x_bpin_net_atrium_server');
+		grServer.get('server_active',true);
+		var serverSysId = grServer.sys_id;
+		var serverName = grServer.server_name;
+		//gs.info(formattedMessage('serverSysId = '+serverSysId+" : serverName = "+serverName));
+		
+		// Get url, username and password for file access
+		var serverUrl = '', serverUsername = '', serverPassword = '';
+		var grApiAccess = new GlideRecord('x_bpin_net_atrium_api_access');
+		if (grApiAccess.get('api_access_server_name',serverName)) {
+			serverUrl = grApiAccess.api_access_server_url;
+			serverUsername = grApiAccess.api_access_server_username;
+			serverPassword = grApiAccess.api_access_server_password;
+		} else {
+			throw{name : 'Get Failure', message : 'x_bpin_net_atrium_api_access' };
+		}
+		//gs.info(formattedMessage('serverUrl = '+serverUrl+' : serverUsername = '+serverUsername+" : serverPassword = "+serverPassword));
+		
+		// Store details of each file job to process
+		var jobDetails = [];
+		var grJobDetails = new GlideRecord('x_bpin_net_atrium_api');
+		grJobDetails.addQuery('api_server_name',serverName);
+		grJobDetails.orderBy('api_order');
+		grJobDetails.query();
+		
+		// process each file job and store details
+		while (grJobDetails.next()) {			
+			jobDetails.push(
+				{apiOrder : grJobDetails.getValue('api_order'), 
+				 apiName : grJobDetails.getValue('api_name'),  
+				 apiStagingTable : grJobDetails.getValue('api_staging_table'), 
+				 apiTargetTable : grJobDetails.getValue('api_target_table'),
+				 apiServerName : grJobDetails.getValue('api_database_server'),
+				 apiDatabaseName : grJobDetails.getValue('api_database_name'),
+				 apiTimeout : grJobDetails.getValue('api_timeout')});			
+		}
+		
+		// check that there is at least file job
+		//gs.info(formattedMessage('No file jobs = '+jobDetails.length));
+		if (jobDetails.length<1) {
+			throw{name : 'Set-up Failure', message : 'No file job details' };
+		}
+
+		// Create new progress record
+		grAppLog = new GlideRecord('x_bpin_net_atrium_applog');
+		grAppLog.initialize();
+		grAppLog.applog_server_name = serverName;
+		grAppLog.applog_completion_state = false;
+		grAppLog.applog_handshake = true;
+		grAppLog.applog_start_date_time = GlideDateTime();
+		grAppLog.setWorkflow(false);
+		var currentProgress = grAppLog.insert();
+		if (currentProgress==''||currentProgress==null) {
+			throw{name : 'Insert Failure', message : 'x_bpin_net_atrium_applog' };
+		}
+		
+		// clear down the staging table for each file job
+		for(var i=0; i<jobDetails.length; i++) {	
+			//gs.info(formattedMessage('tablename = '+jobDetails[i]['apiStagingTable']));		
+			clearData(jobDetails[i]['apiStagingTable']);			
+		}		
+		
+		// get data for staging tables from the mid server
+		for(i=0; i<jobDetails.length; i++) {		
+			getData(
+				serverUrl,
+				jobDetails[i]['apiStagingTable'],
+				jobDetails[i]['apiServerName'],
+				jobDetails[i]['apiDatabaseName'],
+				jobDetails[i]['apiTimeout']);			
+		} 
+		
+		// Set up the item class array
+		var grItemClass = new GlideRecord('x_bpin_net_atrium_item_class');
+		grItemClass.query();
+		while (grItemClass.next()) {
+			atrium_api_import_item_class.push(
+				{item: grItemClass.getValue('item'),
+				 className: grItemClass.getValue('class_name'),
+				 canRouteIp: grItemClass.getValue('can_route_ip')});
+		}
+		
+		// Set up the manufacturer alias array
+		var grManufacturerAlias = new GlideRecord('x_bpin_net_atrium_manufacturer_alias');
+		grManufacturerAlias.query();
+		while (grManufacturerAlias.next()) {
+			atrium_api_import_manufacturer_alias.push(
+				{alias: grManufacturerAlias.getValue('manufacturer_alias'),
+				 name: grManufacturerAlias.getValue('manufacturer')});
+		}
+		
+		// Set up the network host array
+		var grNetworkHost = new GlideRecord('cmdb_ci_network_host');
+		grNetworkHost.addQuery('discovery_source','Atrium');
+		grNetworkHost.query();
+		while (grNetworkHost.next()) {
+			atrium_api_import_network_host.push(
+				{domain: grNetworkHost.getValue('name'),
+				 sysId: grNetworkHost.getValue('sys_id')});
+		}		
+		
+		// clear down the validation error table
+		clearData('x_bpin_net_atrium_validation_error');
+		
+		// validate data on the staging tables
+		for(i=0; i<jobDetails.length; i++) {	
+			if (validateStagingData(jobDetails[i]['apiStagingTable'])) {
+				gs.info(formattedMessage(jobDetails[i]['apiStagingTable']+' passed validation'));
+			} else {
+				throw{name: 'Validation Failure', message: jobDetails[i]['apiStagingTable']+' has invalid data, check validation error table for details'};
+			}
+		}
+		
+		// clear down the target table for each file job
+		for(i=0; i<jobDetails.length; i++) {	
+			//gs.info(formattedMessage('tablename = '+jobDetails[i]['apiTargetTable']));		
+			clearData(jobDetails[i]['apiTargetTable']);			
+		}
+
+		// perform insert or updates to the target tables
+		for(i=0; i<jobDetails.length; i++) {	
+			if(populateTargetData(
+				jobDetails[i]['apiStagingTable'],
+				jobDetails[i]['apiTargetTable'],
+				jobDetails[i]['apiOrder'])) {
+				gs.info(formattedMessage(jobDetails[i]['apiTargetTable']+' successfully populated'));
+			} else {
+				throw{name: 'Update Failure', message: jobDetails[i]['apiTargetTable']+' not correctly populated'};
+			}	
+		}	
+		
+		// Update progress record on success, check if warning are there and need to be sent to slack and issue end message
+		grAppLog = new GlideRecord('x_bpin_net_atrium_applog');
+		grAppLog.get('sys_id',currentProgress);		
+		grAppLog.applog_completion_state = true;
+		grAppLog.applog_handshake = false;
+		grAppLog.applog_end_date_time = GlideDateTime();
+		grAppLog.setWorkflow(false);
+		var updateResult = grAppLog.update();
+		if (updateResult==''||updateResult==null) {
+			throw{name : 'Update Failure', message : 'x_bpin_net_atrium_applog (normal completion)' };
+		}
+		gs.info(formattedMessage(atrium_api_import_warnings));		
+		if (atrium_api_import_warnings.length>20) {	
+			gs.info(formattedMessage('Warnings sent to Slack'));
+			SendSlackMessage('Atrium API Import '+gs.getProperty('instance_name')+atrium_api_import_warnings);
+		}
+		gs.info(formattedMessage('End'));
+		
+	} catch (err) {
+		
+		// raise error message for unexpected error
+		errorMessage = 'Error | Name: '+err.name+' Message : '+err.message;
+		gs.error(formattedMessage(errorMessage));
+		// And send message to Slack
+		errorMessage = 'Atrium API Import : '+gs.getProperty("instance_name")+' : '+errorMessage;
+		//SendSlackMessage(errorMessage);
+		gs.info(errorMessage);
+		
+		// Update progress record on success and issue end message
+		if (currentProgress!==''&&currentProgress!==null) {
+			grAppLog = new GlideRecord('x_bpin_net_atrium_applog');
+			grAppLog.get('sys_id',currentProgress);		
+			grAppLog.applog_completion_state = false;
+			grAppLog.applog_handshake = false;
+			grAppLog.applog_end_date_time = GlideDateTime();
+			grAppLog.setWorkflow(false);
+			var updateResult = grAppLog.update();
+			if (updateResult==''||updateResult==null) {
+				throw{name : 'Update Failure', message : 'x_bpin_net_atrium_applog (unexpected error)' };
+			}
+		}
+		gs.info(formattedMessage('End (unexpected error)'));
+		
+	}
+	
+}
+
+function populateTargetData(stagingTable,targetTable) {
+	
+	var ok = true;
+	var readCount = 0, actionCount = 0;
+	var grSTable = new GlideRecord(stagingTable);
+	gs.info(formattedMessage('Staging table = '+stagingTable+' : Target table = '+targetTable));
+	grSTable.query();
+	while (grSTable.next()) {
+		var grTTable = new GlideRecord(targetTable);
+		grTTable.initialize();
+		grTTable.name = grSTable.getValue('name');
+		grTTable.asset_tag = grSTable.getValue('serial_number');
+		grTTable.serial_number = grSTable.getValue('facility_serial_number');
+		grTTable.installed = grSTable.getValue('installation_date');		
+		grTTable.warranty_expiration = grSTable.getValue('warranty_expiration_date');	
+		var classKey = findIndexData(atrium_api_import_item_class,'item',grSTable.getValue('item'));
+		if (classKey==-1) {
+			// default value if not on mapping table
+			grTTable.mapped_type = 'u_cmdb_ci_ip_other';
+			grTTable.can_route_ip = false;
+		} else {
+			grTTable.mapped_type = atrium_api_import_item_class[classKey]['className'];
+			grTTable.can_route_ip = atrium_api_import_item_class[classKey]['canRouteIp'];			
+		}
+		var manufacturerKey = findIndexData(atrium_api_import_manufacturer_alias,'alias',grSTable.getValue('manufacturer'));
+		if (manufacturerKey==-1) {
+			grTTable.manufacturer = 'Not set up - '+grSTable.getValue('manufacturer');
+		} else {
+				grTTable.manufacturer = atrium_api_import_manufacturer_alias[manufacturerKey]['name'];													  
+		}
+		var locationId = grSTable.getValue('location_id');
+		if ((locationId=='')||(locationId==null)) {
+			// ignore if missing
+		} else {
+			grTTable.location = locationId.toUpperCase();
+		}
+		grTTable.atrium_id = grSTable.getValue('atrium_id');
+		grTTable.atrium_class = grSTable.getValue('atrium_class');
+		grTTable.disposal_date = grSTable.getValue('disposal_date');
+		grTTable.environment = grSTable.getValue('environment');	
+		grTTable.description = grSTable.getValue('short_description');	
+		grTTable.comments = grSTable.getValue('description');		
+		grTTable.fqdn = grSTable.getValue('fqdn');			
+		grTTable.cabinet = grSTable.getValue('cabinet_atrium_id');			
+		var domain = grSTable.getValue('domain');
+		if ((domain=='')||(domain==null) ) {
+			// ignore if missing
+		} else {
+			domain = domain.toUpperCase();
+			var domainTest = findIndexData(atrium_api_import_network_host,'domain',domain);
+			if (domainTest==-1) {
+				// ignore if not found				
+			} else {
+				grTTable.network_name = domain;
+			}
+		}
+		grTTable.vendor_ci_alias = grSTable.getValue('vendor_ci_alias');
+		grTTable.service_level = grSTable.getValue('service_level');
+		grTTable.software_version = grSTable.getValue('firmware_version');
+		grTTable.device_classification = grSTable.getValue('item');
+		grTTable.setWorkflow(false);
+		var insertResult = grTTable.insert();
+		if ((insertResult=='')||(insertResult==null)) {
+			throw {name : 'Target table '+targetTable+' insert failure', message : 'For staging table '+stagingTable+' '+grSTable.getValue('name')};
+		} else {
+			actionCount++;			
+		}
+		readCount++;
+	}
+	gs.info(formattedMessage('Completed insert from '+stagingTable+' to '+targetTable+' : '+readCount+' records read : '+actionCount+' records inserted'));
+	// fail if no or records inserted does not match number read
+	if (readCount!=actionCount) {
+		ok = false;
+	}
+	return ok;
+	
+}
+
+function validateStagingData(table) {
+	
+	// process each record in the table and validate it	
+	var ok = true;
+	var totalCount = 0, errorCount = 0, warningCount = 0;
+	var aiUniqueChk = [], nUniqueChk = [];
+	var grValTable = new GlideRecord(table);
+	grValTable.query();
+	while (grValTable.next()) {
+		var foundError = false, foundWarning = false;	
+		var sysId = grValTable.getValue('sys_id');
+		if (table=='x_bpin_net_atrium_stagingDevices') {
+			var atriumId = grValTable.getValue('atrium_id');
+			if ((atriumId=='')||(atriumId==null)) {
+				foundError = true;
+				writeValidationError(table,'Atrium Id','Atrium Id is missing',sysId,true);
+			} else {
+				var aiKey = {ukey: atriumId};
+				var aiRec = findIndexData(aiUniqueChk,'ukey',atriumId);
+				if (aiRec==-1) {
+					aiUniqueChk.push(aiKey);
+				} else {
+					foundError = true;					
+					writeValidationError(table,'Atrium Id','Atrium Id '+atriumId+'is not unique',sysId,true);
+				}
+			}
+			var atriumClass = grValTable.getValue('atrium_class');
+			if ((atriumClass=='')||(atriumClass==null)) {				
+				foundError = true;
+				writeValidationError(table,'Atrium Class','Atrium Class is missing',sysId,true);
+			}
+			var cname = grValTable.getValue('name');
+			if ((cname=='')||(cname==null)) {				
+				foundError = true;
+				writeValidationError(table,'Name','Name is missing',sysId,true);
+			} else {
+				var nKey = {ukey: cname};
+				var nRec = findIndexData(nUniqueChk,'ukey',cname);
+				if (nRec==-1) {
+					nUniqueChk.push(nKey);
+				} else {
+					foundError = true;					
+					writeValidationError(table,'Name','Name '+cname+'is not unique',sysId,true);
+				}
+			}
+			var item = grValTable.getValue('item');
+			if ((item=='')||(item==null)) {
+				foundError = true;
+				writeValidationError(table,'Item','Item is missing',sysId,true);
+			} else {
+				var itemTest = findIndexData(atrium_api_import_item_class,'item',item);
+				if (itemTest==-1) {
+					foundWarning = true;
+					addWarning('Item not held on Item Class',item);
+				}
+			}
+			var manufacturer = grValTable.getValue('manufacturer');
+			if ((manufacturer=='')||(manufacturer==null)) {
+				// ignore if missing
+			} else {
+				var manufacturerTest = findIndexData(atrium_api_import_manufacturer_alias,'alias',manufacturer);
+				if (manufacturerTest==-1) {
+					foundWarning = true;
+					addWarning('Manufacturer not held on Manufacturer Alias',manufacturer);
+				}
+			}
+			var domain = grValTable.getValue('domain');
+			if ((domain=='')||(domain==null) ) {
+				// ignore if missing
+			} else {
+				domain = domain.toUpperCase();
+				var domainTest = findIndexData(atrium_api_import_network_host,'domain',domain);
+				if (domainTest==-1) {
+					foundWarning=true;
+					addWarning('Domain not held on Network Host for Discovery Source of Atrium',domain);					
+				}
+			}
+			var locationId = grValTable.getValue('location_id');
+			if ((locationId=='')||(locationId==null)) {
+				// ignore if missing
+			} else {				
+				var ucStart = locationId.substring(0,2).toUpperCase();
+				var nEnd = locationId.substring(2,7);
+				var letters = '^[A-Z]+$';
+				if ((isNaN(nEnd))||(!(ucStart.match(letters)))) {
+					foundError = true;
+					writeValidationError(table,'Location Id','Location Id '+locationId+' in incorrect format',sysId,true);
+				}
+			}
+		}
+		++totalCount;
+		if (foundError) {
+			errorCount++;
+		} else {
+			if (foundWarning) {
+				warningCount++;
+			}
+		}
+	}
+	if (errorCount>0) {
+		ok = false;
+	}
+	gs.info(formattedMessage(table+' validation : '+ 'records checked '+totalCount+' : error records '+errorCount+' : warning records '+warningCount));
+	return ok;
+	
+}
+
+function writeValidationError(tablename,column,error,sysId,failProcess) {
+	
+	var grValidationError = new GlideRecord('x_bpin_net_atrium_validation_error');
+	grValidationError.initialize();
+	grValidationError.table_name = tablename;
+	grValidationError.column_name = column;
+	grValidationError.error = error;
+	grValidationError.table_sys_id = sysId;
+	grValidationError.fail_process = failProcess;
+	var result = grValidationError.insert();	
+	if ((result=='')||(result==null)) {
+		throw {name : 'insert Validation Error failure', message : 'For '+tablename+' : '+column+' : '+error};
+	} 
+	
+}
+
+// get data from midserver via JDBC SQL
+function getData(midServer,table,server,database,timeout) {
+	
+	//gs.info(formattedMessage('Midserver = '+midServer+' : table = '+table+' : server = '+server+" : database = "+database+' : timeout = '+timeout));
+		
+	try {
+		
+		// Build driver, connection string and SQL
+		var driver = 'com.microsoft.sqlserver.jdbc.SQLServerDrive';
+		var connectionString = 'jdbc:sqlserver:'+server+';databaseName='+database+';integratedSecurity=true;';
+		var sqlQuery = buildSql(table);
+		//gs.info(formattedMessage('sql = '+sqlQuery));
+			
+		// Build the payload
+		var xml = '<?xml version="1.0" encoding="UTF-8"?>';
+		xml = '<parameters>';
+		xml += '<parameter name="jdbc_driver" value="'+driver+'"/>';
+		xml += '<parameter name="connection_string" value="'+connectionString+'"/>';
+		xml += '<parameter name="query" value="Specific SQL"/>';
+		xml += '<parameter name="sql_statement" value="'+sqlQuery+'"/>';
+		xml += '</parameters>';
+		
+		// create the job
+		var ecc = new GlideRecord('ecc_queue');
+		ecc.initialize();
+		ecc.agent='mid.server.'+midServer;
+		ecc.topic='JDBCProbe';
+		ecc.payload=xml;
+		ecc.queue='output';
+		ecc.state='ready';	
+		var result = ecc.insert();
+		//gs.info(formattedMessage('result = '+result));
+		if (result=='' || result == null){
+			throw {name : 'Mid Server Failure', message : 'For ecc_queue'};
+		}	
+		
+		// Build query to check completion			
+		var resp = new GlideRecord('ecc_queue');
+		resp.addQuery('response_to', result);
+		resp.addQuery('topic','JDBCProbeCompleted');
+		var counter= 0;
+		do {
+			resp.query();
+			resp.next();
+			sleep(1000);
+			counter ++;
+		} while(!resp.sys_id&&counter<timeout);
+		if (!resp.sys_id) {
+			throw {name : 'Mid Server Failure', message : 'no response before timeout ('+table+')'};
+		} else {
+			gs.info(formattedMessage('Mid Server query has responded for '+table));
+			// get data chunked in 200 records
+			var recCount=0, recFrom=0;
+			var eccRes = new GlideRecord('ecc_queue');
+			eccRes.addQuery('agent','JDBCProbeResult');
+			eccRes.addQuery('topic','JDBCProbe');
+			eccRes.addQuery('queue','input');
+			eccRes.addQuery('state','ready');
+			eccRes.addQuery('response_to',result);
+			eccRes.orderBy('sequence');
+			eccRes.query();
+			var insertCount = 0;
+			while (eccRes.next()) {
+				
+				recFrom = recCount+1;
+				recCount = parseInt(eccRes.name);				
+				//gs.info(formattedMessage('recFrom ='+recFrom+" : recCount ="+recCount));
+				
+				// check if the payload is in an attachment
+				var attachment = false;
+				var payloadData = '';
+				if (eccRes.payload.includes('<see_attachment')) {
+					attachment = true;
+					//gs.info(formattedMessage('Detected attachment : Record Count from '+recFrom+' for '+table));
+					// find master attachment record
+					var attach = new GlideRecord('sys_attachment');
+					attach.addQuery('table_name','ecc_queue');
+					attach.addQuery('table_sys_id',eccRes.sys_id.toString());
+					attach.addQuery('filename','payload.txt');
+					attach.query();
+					if (attach.next()) {
+						var gsa = new GlideSysAttachment();
+						payloadData = gsa.getContent(attach);
+					}					
+				}
+				var payload = new XMLDocument2();
+				if (attachment) {
+					payload.parseXML(payloadData);					
+				} else {
+					payload.parseXML(eccRes.payload);
+				}
+				//gs.info(formattedMessage('From record '+recFrom+' to record '+recCount+' chunked for '+table));
+				
+				if ((attachment)&&(payloadData=='')) {
+					gs.info(formattedMessage('From record '+recFrom+' to record '+recCount+' empty attachment '+table+' : payloadData = ~'+payloadData+'~'));
+					throw { name: 'Staging Table Mid Server Failure', message : 'From record '+recFrom+' to record '+recCount+' empty attachment '+table+' : payloadData = ~'+payloadData+'~'};
+				} else {
+					// add data to the staging table
+					var xPath = "//results/result";
+					var node = payload.getNode(xPath);
+					var iter = node.getChildNodeIterator();
+					while (iter.hasNext()) {
+						var n = iter.next();
+						var grST = new GlideRecord(table);
+						grST.initialize();
+						var iter1 = n.getChildNodeIterator();
+						while (iter1.hasNext()) {
+							var n1 = iter1.next();
+							var f = n1.getNodeName().toLowerCase();
+							var v = n1.getTextContent();
+							//gs.info(formattedMessage('col ='+col+' val = '+val));
+							grST.setValue(f,v);
+						}
+						grST.setWorkflow(false);
+						var insertResult = grST.insert();
+						if (result==''||result==null) {
+							throw { name : 'Staging Table Insert Failure', message : 'for '+table};
+						} else {
+							insertCount=insertCount+1;
+						}
+					}
+				}
+				
+				// check for no data loaded
+				if (recCount==0){
+					throw {name : 'Data Load Failure', message : 'No Data Loaded to Staging Table'+resp.payload};
+				} 
+												   
+			}
+			if (insertCount==0) {
+				throw {name : 'Data Load Failure', message : 'No records written to statging table '+table};
+			} else
+				gs.info(formattedMessage(insertCount+' records written to the staging table '+table));
+		}	
+		
+	} catch (err) {
+		
+		gs.error(formattedMessage('Get MidServer data for : '+table+' : '+err.name+' '+err.message));
+		
+	}
+	
+}
+
+// build SQL query for specific staging table
+function buildSql(table) {
+	
+	var sql = "SELECT ";
+	if (table=='x_bpin_net_atrium_stagingDevices') {
+		sql += "DISTINCT ";
+		sql += "C.BP_TokenID AS atrium_id, ";
+		sql += "'BMC.CORE:'+C.ClassId AS atrium_class, ";		
+		sql += "CASE ";
+		sql += "WHEN	CHARINDEX('.',IsNULL(C.Name,''))-1 != 0  AND CHARINDEX('.',IsNULL(C.Name,''))-1 != -1";
+		sql += "	THEN ";
+		sql += "		CASE ";
+		sql += "			WHEN	ISNUMERIC(LEFT(IsNULL(C.Name,''),CHARINDEX('.',IsNULL(C.Name,''))-1)) = 1 ";
+		sql += "			THEN	LTRIM(RTRIM(LOWER(REPLACE(IsNULL(C.Name,''),CHAR(10),'')))) ";
+		sql += "			ELSE ";
+		sql += "				CASE ";
+		sql += "					WHEN C.Name LIKE '\BP%' "; 
+		sql += "					THEN	LTRIM(RTRIM(LOWER(REPLACE(REPLACE(IsNULL(C.Name,''),CHAR(92),'_') ,'.','_')))) ";
+		sql += "					WHEN C.Name LIKE '%TAP%' ";
+		sql += "						THEN	REPLACE(LTRIM(RTRIM(LOWER(REPLACE(IsNULL(C.Name,''),'.','_')))),' ','_') ";
+		sql += "					ELSE ";
+		sql += "						REPLACE(LTRIM(RTRIM(LOWER(REPLACE(REPLACE(LEFT(IsNULL(C.Name,''),CHARINDEX('.',IsNULL(C.Name,''))-1) ,CHAR(10),'') ,'/','_')))),' ','_') ";
+		sql += "				END ";
+		sql += "		END ";
+		sql += "	ELSE	REPLACE(LTRIM(RTRIM(LOWER(REPLACE(REPLACE(IsNULL(C.Name,''),CHAR(10),''),'/','_')))),' ','_') ";
+		sql += "END	AS name, ";		
+		sql += "LOWER(LTRIM(RTRIM(REPLACE(ISNULL(C.BP_Alias,''),CHAR(10),'')))) AS vendor_ci_alias, ";
+		sql += "( ";
+		sql += "SELECT fev.value ";
+		sql += "FROM field_enum_values fev ";
+		sql += "INNER JOIN field f ";
+		sql += "ON	fev.fieldId = f.fieldId ";
+		sql += "AND	fev.schemaId = f.schemaId ";
+		sql += "AND	f.fieldName = 'AssetLifeCycleStatus' ";
+		sql += "INNER JOIN arschema ars ";
+		sql += "ON	f.schemaId = ars.schemaId ";
+		sql += "AND	ars.Name = 'BMC.CORE:BMC_COMPUTERSYSTEM' ";
+		sql += "WHERE fev.enumId = C.AssetLifecycleStatus ";
+		sql += ") AS status, ";
+		sql += "ISNULL( ";
+		sql += "( ";
+		sql += "SELECT fev.value ";
+		sql += "FROM field_enum_values fev ";
+		sql += "INNER JOIN field f ";
+		sql += "ON	fev.fieldId = f.fieldId ";
+		sql += "AND	fev.schemaId = f.schemaId ";
+		sql += "AND	f.fieldName = 'StatusReason' ";
+		sql += "INNER JOIN arschema ars ";
+		sql += "ON	f.schemaId = ars.schemaId ";
+		sql += "AND	ars.Name = 'BMC.CORE:BMC_COMPUTERSYSTEM' ";
+		sql += "WHERE fev.enumId = C.StatusReason ";
+		sql += ") ";
+		sql += ",'Not Applicable') AS status_reason, ";
+		sql += "ISNULL(C.ShortDescription,'') AS short_description, ";
+		sql += "ISNULL(CAST(C.[Description] AS VARCHAR(254)),'') AS description, ";
+		sql += "ISNULL(C.Item,'') AS item, ";
+		sql += "ISNULL(C.Model,'') AS product_name, ";
+		sql += "ISNULL(C.ManufacturerName,'') AS manufacturer, ";
+		sql += "ISNULL(C.BP_Environment,'Production') AS environment, ";
+		sql += "ISNULL(C.HostName,'') AS fqdn, ";
+		sql += "ISNULL(C.Name,'') AS host_name, ";
+		sql += "ISNULL(C.Domain,'')	AS domain, ";
+		sql += "LTRIM(RTRIM(ISNULL(C.CI_Category,'Not Applicable'))) AS service_level, ";
+		sql += "ISNULL(C.firmware_version,'') AS firmware_version, ";
+		sql += "RTRIM(LTRIM(ISNULL(C.SerialNumber,'')))	AS	serial_number, ";
+		sql += "RTRIM(LTRIM(ISNULL(C.BP_FacilityRecordedSerialNumbe,''))) AS facility_serial_number, ";
+		sql += "ISNULL(CONVERT(varchar,DATEADD(s,C.BP_WarrantyExpirationDate,'1/1/1970 00:00:00'),120),'') AS warranty_expiration_date, ";
+		//sql += "ISNULL(CONVERT(varchar,DATEADD(s,C.BP_EndOfServiceLife,'1/1/1970 00:00:00'),120),'') AS end_of_service_life, ";
+		//sql += "ISNULL(CONVERT(varchar,DATEADD(s,C.BP_ExtendedDateOfServiceLife,'1/1/1970 00:00:00'),120),'') AS extended_service_life,	 ";
+		sql += "ISNULL(CONVERT(varchar,DATEADD(s,C.InstallationDate,'1/1/1970 00:00:00'),120),'')	AS installation_date, ";
+		sql += "ISNULL(CONVERT(varchar,DATEADD(s,C.DisposalDate,'1/1/1970 00:00:00'),120),'')		AS disposal_date, ";
+		sql += "ISNULL(S.Location_ID,'') AS	location_id, ";
+		//sql += "ISNULL(OSSG.Full_name,'') AS os_support_group, ";
+		//sql += "ISNULL(HWSG.Full_Name,'') AS hw_support_group, ";
+		sql += "ISNULL(CABN.BP_TokenID,'') AS cabinet_atrium_id ";
+		//sql += "ISNULL(CABN.Name,'') AS	cabinet_name ";
+		sql += "FROM BMC_CORE_BMC_ComputerSystem C ";
+		sql += "LEFT OUTER JOIN SIT_Site S ";
+		sql += "ON	C.[Site] = S.[Site] ";
+		sql += "AND S.[Status] IN ";
+		sql += "( ";
+		sql += "SELECT fev.enumId ";
+		sql += "FROM field_enum_values fev ";
+		sql += "INNER JOIN field f ";
+		sql += "ON	fev.fieldId = f.fieldId ";
+		sql += "AND	fev.schemaId = f.schemaId ";
+		sql += "AND	f.fieldName = 'Status' ";
+		sql += "INNER JOIN arschema ars ";
+		sql += "ON	f.schemaId = ars.schemaId ";
+		sql += "AND	ars.Name = 'SIT:Site' ";
+		sql += "WHERE fev.value = 'Enabled' ";
+		sql += ") ";
+		sql += "LEFT OUTER JOIN	BMC_CORE_BMC_BaseRelationship RN ";
+		sql += "ON	C.InstanceID = RN.Destination_InstanceID "; 
+		sql += "AND	RN.Destination_ClassID = C.ClassId ";
+		sql += "AND	IsNULL(RN.MarkAsDeleted,0)=0 ";
+		sql += "AND	RN.DatasetId='BMC.ASSET' ";
+		sql += "AND	RN.Source_ClassId = 'BP_Cabinet' ";
+	    sql += "LEFT OUTER JOIN BP_CORE_BP_Cabinet CABN ";
+		sql += "ON	CABN.InstanceID = RN.Source_InstanceID ";
+		sql += "AND	CABN.ClassId = RN.Source_ClassId ";
+		sql += "AND	IsNULL(CABN.MarkAsDeleted,0)=0 ";
+		sql += "AND	ISNULL(CABN.zCreationInProgress,1) = 1 ";
+		sql += "AND	CABN.DatasetId='BMC.ASSET' ";
+		sql += "AND	CABN.Item='Cabinet' ";	
+		sql += "AND CABN.AssetLifeCycleStatus IN ";
+		sql += "( ";
+		sql += "SELECT fev.enumId ";
+		sql += "FROM field_enum_values fev ";
+		sql += "INNER JOIN field f ";
+		sql += "ON	fev.fieldId = f.fieldId ";
+		sql += "AND	fev.schemaId = f.schemaId ";
+		sql += "AND	f.fieldName = 'AssetLifeCycleStatus' ";
+		sql += "INNER JOIN arschema ars ";
+		sql += "ON	f.schemaId = ars.schemaId ";
+		sql += "AND	ars.Name = 'BMC.CORE:BMC_BASEELEMENT' ";
+		sql += "WHERE fev.value != 'Disposed' ";
+		sql += ") ";
+		sql += "LEFT OUTER JOIN	AST_AssetPeople OSSG ";
+		sql += "ON	OSSG.AssetInstanceID = C.ReconciliationIdentity ";
+		sql += "AND	ISNULL(OSSG.zCreationInProgress,1) = 1 ";
+		sql += "AND	OSSG.AssetClassId = 'BMC_COMPUTERSYSTEM' ";
+		//sql += "AND	OSSG.IndividualOrGroup = 0 ";
+		sql += "AND	OSSG.BP_Role = 'Operating System Support' ";
+		sql += "LEFT OUTER JOIN	AST_AssetPeople HWSG ";
+		sql += "ON	HWSG.AssetInstanceID = C.ReconciliationIdentity	 ";
+		sql += "AND	ISNULL(HWSG.zCreationInProgress,1) = 1 ";
+		sql += "AND	HWSG.AssetClassId = 'BMC_COMPUTERSYSTEM' ";
+		//sql += "AND	HWSG.IndividualOrGroup = 0	";					
+		sql += "AND	HWSG.BP_Role = 'Hardware Support' ";
+		sql += "WHERE ISNULL(C.MarkAsDeleted,0)=0 ";
+		sql += "AND ISNULL(c.zCreationInProgress,1)=1 ";
+		sql += "AND	C.DatasetId='BMC.ASSET' ";
+		sql += "AND C.AssetLifeCycleStatus IN ";
+		sql += "( ";
+		sql += "SELECT fev.enumId ";
+		sql += "FROM field_enum_values fev ";
+		sql += "INNER JOIN field f ";
+		sql += "ON	fev.fieldId = f.fieldId ";
+		sql += "AND	fev.schemaId = f.schemaId ";
+		sql += "AND	f.fieldName = 'AssetLifeCycleStatus' ";
+		sql += "INNER JOIN arschema ars ";
+		sql += "ON	f.schemaId = ars.schemaId ";
+		sql += "AND	ars.Name = 'BMC.CORE:BMC_COMPUTERSYSTEM' ";
+		sql += "WHERE fev.value != 'Disposed' ";
+		sql += ") ";
+		sql += "AND C.[Type] = 'Networking Component' ";
+		sql += "AND C.Name IN ";
+		sql += "( ";
+		sql += "SELECT ";
+		sql += "LTRIM(RTRIM(REPLACE(ISNULL(C2.Name,''),CHAR(10),''))) AS [name]	 ";
+		sql += "FROM  BMC_CORE_BMC_ComputerSystem C2 ";
+		sql += "WHERE ISNULL(C2.MarkAsDeleted,0)=0 ";
+		sql += "AND	ISNULL(C2.zCreationInProgress,1) = 1 ";
+		sql += "AND	C2.DatasetId='BMC.ASSET' ";
+		sql += "AND C2.AssetLifeCycleStatus IN ";
+		sql += "( ";
+		sql += "SELECT fev.enumId ";
+		sql += "FROM field_enum_values fev ";
+		sql += "INNER JOIN field f ";
+		sql += "ON	fev.fieldId = f.fieldId ";
+		sql += "AND	fev.schemaId = f.schemaId ";
+		sql += "AND	f.fieldName = 'AssetLifeCycleStatus' ";
+		sql += "INNER JOIN arschema ars ";
+		sql += "ON	f.schemaId = ars.schemaId ";
+		sql += "AND	ars.Name = 'BMC.CORE:BMC_COMPUTERSYSTEM' ";
+		sql += "WHERE fev.value != 'Disposed' ";
+		sql += ") ";
+		sql += "AND	C2.[Type] = 'Networking Component'  ";
+		sql += "GROUP BY ";
+		sql += "C2.Name ";
+		sql += "HAVING COUNT(*) = 1 ";
+		sql += ") ";
+		sql += "AND IsNULL(OSSG.Full_name,'') != 'Oceaneering->GDS->GFNS' ";
+		sql += "AND IsNULL(OSSG.Full_name,'') != 'BP->CMS Data Management->3rd Party - T-Systems NOC' ";
+		sql += "AND IsNULL(C.PrimaryCapability,1) IN ";
+		sql += "( ";
+		sql += "SELECT fev.enumId ";
+		sql += "FROM field_enum_values fev ";
+		sql += "INNER JOIN field f ";
+		sql += "ON	fev.fieldId = f.fieldId ";
+		sql += "AND	fev.schemaId = f.schemaId ";
+		sql += "AND	f.fieldName = 'PrimaryCapability' ";
+		sql += "INNER JOIN arschema ars ";
+		sql += "ON	f.schemaId = ars.schemaId ";
+		sql += "AND	ars.Name = 'BMC.CORE:BMC_COMPUTERSYSTEM' ";
+		sql += "WHERE fev.value != 'SANSwitch' ";
+		sql += ") ";
+		sql += "AND	C.Item != 'Server' ";		
+	}	
+	return sql;
+	
+}
+
+// deletes all data on a selected table
+function clearData(tablename) {
+	
+	try {
+		
+		// delete all rows on table		
+		var grDeleteTable = new GlideRecord(tablename);
+		grDeleteTable.setWorkflow(false);
+		grDeleteTable.deleteMultiple();
+		gs.info(formattedMessage('Table '+tablename+' cleared down'));
+		
+	} catch(err) {
+		
+		gs.error(formattedMessage('Table : '+tablename+' : '+err.name+' '+err.message));
+		
+	}	
+	
+}
+
+function formattedMessage(message) {
+	
+	// increment message count and create standard message 
+	atrium_api_import_message_count = atrium_api_import_message_count + 10;
+	return zeroPad(atrium_api_import_message_count,3)+' | Network (Atrium) API Import - '+gs.getProperty("instance_name")+' | '+message+' |';
+	
+}
+
+function zeroPad(num, places) {
+	
+	// zero pad number to required size
+	var zero = places - num.toString().length + 1;
+	return Array(+(zero > 0 && zero)).join("0") + num;
+	
+}
+
+// send a message to slack
+function SendSlackMessage(message){
+	
+	// OK setup the object for the REST API call
+	var restAPICall = new sn_ws.RESTMessageV2();
+
+	// Setup the REST API Call in code rather than thru the scripted  Web services
+	restAPICall.setHttpMethod("post");
+	var util = new global.MyUtilitiesClientUtils();
+	restAPICall.setEndpoint(util.getSlackChannel(gs.getProperty("instance_name"),'CMDB'));
+	restAPICall.setRequestHeader("Accept","Application/json");
+	restAPICall.setRequestHeader("Content-Type","Application/json");
+	var jsonString = message;
+	jsonString=jsonString.replace(/[\r]/g,"\r");
+	jsonString=jsonString.replace(/[\n]/g,"\n");
+	jsonString=jsonString.replace(/[\t]/g,"\t");
+	jsonString=jsonString.replace(/[\b]/g,"\b");
+	jsonString=jsonString.replace(/[\f]/g,"\f");	
+	jsonString=jsonString.replace(/"/g, '\\"');
+	//jsonString=jsonString.replace(/&/g, "\\&");
+	
+	// myEscapedJSONString is now ready to be POST'ed to the server. 
+	restAPICall.setRequestBody('{"text": "'+jsonString+'"}');
+
+	// Get the results
+	var response = restAPICall.execute();  
+	response.waitForResponse(60); 
+	var status = response.getStatusCode(); 
+	// Check if completed OK
+	if (status==200){	
+		// Get the returned structure
+		jsonString = response.getBody(); 
+	} else {
+		throw {name : 'REST API Failure', message : 'Response Code - ' + status };
+	}	
+	return;
+	
+}
+
+
+// add a warning, checking it has not already been included
+function addWarning(desc,val) {
+	
+	var warning = desc + ' : ' + val;
+	if (!atrium_api_import_warnings.includes(warning)) {
+		atrium_api_import_warnings += '\n' + warning;
+	}	
+	// atrium_api_import_warnings += '\n' + desc + ' : ' + val;
+	
+}
+
+// delay for selected no of milli seconds
+function sleep(ms) { 
+	
+	// pause for selected number of milliseconds
+    var unixtime_ms = new Date().getTime();  
+    while(new Date().getTime() < unixtime_ms + ms) {}  
+	
+} 
+
+// For a given property/value pair find the index in a multi-dimensional array
+function findIndexData(data, property, value) {
+	
+    var result = -1;
+    data.some(function (item, i) {
+        if (item[property] == value) {
+            result = i;
+            return true;
+        }
+    });
+    return result;
+	
+}]]></script>
+        <sys_class_name>sysauto_script</sys_class_name>
+        <sys_created_by>negel5</sys_created_by>
+        <sys_created_on>2018-09-26 10:39:41</sys_created_on>
+        <sys_id>3e636611db34eb804f73498039961970</sys_id>
+        <sys_mod_count>146</sys_mod_count>
+        <sys_name>Atrium API Import</sys_name>
+        <sys_package display_value="Import - Network (Atrium)" source="x_bpin_net_atrium">818273ecdbb0e7804f734980399619be</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Import - Network (Atrium)">818273ecdbb0e7804f734980399619be</sys_scope>
+        <sys_update_name>sysauto_script_3e636611db34eb804f73498039961970</sys_update_name>
+        <sys_updated_by>negel5</sys_updated_by>
+        <sys_updated_on>2018-10-05 10:20:56</sys_updated_on>
+        <upgrade_safe>false</upgrade_safe>
+    </sysauto_script>
+</record_update>

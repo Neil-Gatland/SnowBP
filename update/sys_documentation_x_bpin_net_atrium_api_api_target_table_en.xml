@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update>
+    <sys_documentation element="api_target_table" label="API Target Table" language="en" table="x_bpin_net_atrium_api">
+        <sys_documentation action="INSERT_OR_UPDATE">
+            <element>api_target_table</element>
+            <help/>
+            <hint/>
+            <label>API Target Table</label>
+            <language>en</language>
+            <name>x_bpin_net_atrium_api</name>
+            <plural>API Target Tables</plural>
+            <sys_class_name>sys_documentation</sys_class_name>
+            <sys_created_by>s2at55</sys_created_by>
+            <sys_created_on>2018-09-24 08:30:23</sys_created_on>
+            <sys_id>10f437a4dbf0e7804f734980399619d6</sys_id>
+            <sys_mod_count>0</sys_mod_count>
+            <sys_name>API Target Table</sys_name>
+            <sys_package display_value="Import - Network (Atrium)" source="x_bpin_net_atrium">818273ecdbb0e7804f734980399619be</sys_package>
+            <sys_policy/>
+            <sys_scope display_value="Import - Network (Atrium)">818273ecdbb0e7804f734980399619be</sys_scope>
+            <sys_update_name>sys_documentation_x_bpin_net_atrium_api_api_target_table_en</sys_update_name>
+            <sys_updated_by>s2at55</sys_updated_by>
+            <sys_updated_on>2018-09-24 08:30:23</sys_updated_on>
+            <url/>
+            <url_target/>
+        </sys_documentation>
+    </sys_documentation>
+</record_update>

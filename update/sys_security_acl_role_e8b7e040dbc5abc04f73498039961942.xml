@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sys_security_acl_role">
+    <sys_security_acl_role action="INSERT_OR_UPDATE">
+        <sys_class_name>sys_security_acl_role</sys_class_name>
+        <sys_created_by>negel5</sys_created_by>
+        <sys_created_on>2018-10-04 14:32:23</sys_created_on>
+        <sys_id>e8b7e040dbc5abc04f73498039961942</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>x_bpin_net_atrium_targetdevices2.x_bpin_net_atrium.targetdevices2_user</sys_name>
+        <sys_package display_value="Import - Network (Atrium)" source="x_bpin_net_atrium">818273ecdbb0e7804f734980399619be</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Import - Network (Atrium)">818273ecdbb0e7804f734980399619be</sys_scope>
+        <sys_security_acl display_value="x_bpin_net_atrium_targetdevices2">e0b7e040dbc5abc04f7349803996193e</sys_security_acl>
+        <sys_update_name>sys_security_acl_role_e8b7e040dbc5abc04f73498039961942</sys_update_name>
+        <sys_updated_by>negel5</sys_updated_by>
+        <sys_updated_on>2018-10-04 14:32:23</sys_updated_on>
+        <sys_user_role display_value="x_bpin_net_atrium.targetdevices2_user" name="x_bpin_net_atrium.targetdevices2_user">68b76c0cdb85abc04f734980399619bd</sys_user_role>
+        <transaction_id/>
+    </sys_security_acl_role>
+</record_update>

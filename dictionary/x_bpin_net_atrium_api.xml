@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+    <element label="API" max_length="40" name="x_bpin_net_atrium_api" type="collection">
+        <element label="API Database Name" max_length="255" name="api_database_name" type="string"/>
+        <element label="API Database Server" max_length="255" name="api_database_server" type="string"/>
+        <element label="API Method" max_length="40" name="api_method" type="string"/>
+        <element label="API Name" max_length="254" name="api_name" type="string"/>
+        <element label="API Order" max_length="40" name="api_order" type="integer"/>
+        <element label="API Server Name" max_length="32" name="api_server_name" reference="x_bpin_net_atrium_server" reference_key="server_name" type="reference"/>
+        <element label="API Staging Table" max_length="40" name="api_staging_table" type="string"/>
+        <element label="API Target Table" max_length="254" name="api_target_table" type="string"/>
+        <element label="API Timeout" max_length="40" name="api_timeout" type="integer"/>
+        <index name="index">
+            <element name="api_server_name"/>
+        </index>
+    </element>
+</database>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+    <element label="Validation Error" max_length="40" name="x_bpin_net_atrium_validation_error" type="collection">
+        <element label="Column Name" max_length="40" name="column_name" type="string"/>
+        <element label="Error" max_length="255" name="error" type="string"/>
+        <element label="Fail Process" max_length="40" name="fail_process" type="boolean"/>
+        <element label="Table Name" max_length="40" name="table_name" type="string"/>
+        <element label="Table Sys Id" max_length="40" name="table_sys_id" type="string"/>
+    </element>
+</database>

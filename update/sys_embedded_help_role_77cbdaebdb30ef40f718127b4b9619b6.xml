@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<record_update table="sys_embedded_help_role">
+    <sys_embedded_help_role action="INSERT_OR_UPDATE">
+        <order>1000</order>
+        <role display_value="x_bpin_net_atrium.manufacturer_alias_user" name="x_bpin_net_atrium.manufacturer_alias_user">37cbdaebdb30ef40f718127b4b9619b4</role>
+        <sys_class_name>sys_embedded_help_role</sys_class_name>
+        <sys_created_by>negel5</sys_created_by>
+        <sys_created_on>2018-10-03 09:42:42</sys_created_on>
+        <sys_id>77cbdaebdb30ef40f718127b4b9619b6</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>37cbdaebdb30ef40f718127b4b9619b4</sys_name>
+        <sys_package display_value="Import - Network (Atrium)" source="x_bpin_net_atrium">818273ecdbb0e7804f734980399619be</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="Import - Network (Atrium)">818273ecdbb0e7804f734980399619be</sys_scope>
+        <sys_update_name>sys_embedded_help_role_77cbdaebdb30ef40f718127b4b9619b6</sys_update_name>
+        <sys_updated_by>negel5</sys_updated_by>
+        <sys_updated_on>2018-10-03 09:42:42</sys_updated_on>
+    </sys_embedded_help_role>
+</record_update>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+    <element label="Manufacturer Alias" max_length="40" name="x_bpin_net_atrium_manufacturer_alias" type="collection">
+        <element label="Manufacturer" max_length="40" name="manufacturer" type="string"/>
+        <element label="Manufacturer Alias" max_length="40" name="manufacturer_alias" type="string"/>
+    </element>
+</database>

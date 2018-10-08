@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+    <element label="stagingDevices" max_length="40" name="x_bpin_net_atrium_stagingdevices" sizeclass="106670" type="collection">
+        <element label="Atrium Class" max_length="255" name="atrium_class" type="string"/>
+        <element label="Atrium Id" max_length="40" name="atrium_id" type="integer"/>
+        <element label="Cabinet Atrium Id" max_length="40" name="cabinet_atrium_id" type="integer"/>
+        <element label="Cabinet Name" max_length="255" name="cabinet_name" type="string"/>
+        <element label="Description" max_length="4000" name="description" type="string"/>
+        <element label="Disposal Date" max_length="40" name="disposal_date" type="glide_date_time"/>
+        <element label="Domain" max_length="255" name="domain" type="string"/>
+        <element label="End of Service Life" max_length="40" name="end_of_service_life" type="glide_date_time"/>
+        <element label="Environment" max_length="50" name="environment" type="string"/>
+        <element label="Extended Service Life" max_length="40" name="extended_service_life" type="glide_date_time"/>
+        <element label="Facility Serial Number" max_length="40" name="facility_serial_number" type="string"/>
+        <element label="Firmware Version" max_length="255" name="firmware_version" type="string"/>
+        <element label="FQDN" max_length="255" name="fqdn" type="string"/>
+        <element label="Host Name" max_length="255" name="host_name" type="string"/>
+        <element label="HW Support Group" max_length="255" name="hw_support_group" type="string"/>
+        <element label="Installation Date" max_length="40" name="installation_date" type="glide_date_time"/>
+        <element label="Item" max_length="40" name="item" type="string"/>
+        <element label="Location Id" max_length="10" name="location_id" type="string"/>
+        <element label="Manufacturer" max_length="255" name="manufacturer" type="string"/>
+        <element label="Name" max_length="255" name="name" type="string"/>
+        <element label="OS Support Group" max_length="255" name="os_support_group" type="string"/>
+        <element label="Product Name" max_length="255" name="product_name" type="string"/>
+        <element label="Serial Number" max_length="40" name="serial_number" type="string"/>
+        <element label="Service Level" max_length="255" name="service_level" type="string"/>
+        <element label="Short Description" max_length="1000" name="short_description" type="string"/>
+        <element label="Status" max_length="255" name="status" type="string"/>
+        <element label="Status Reason" max_length="255" name="status_reason" type="string"/>
+        <element label="Vendor CI Alias" max_length="255" name="vendor_ci_alias" type="string"/>
+        <element label="Warranty Expiration Date" max_length="40" name="warranty_expiration_date" type="glide_date_time"/>
+    </element>
+</database>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<database>
+    <element label="Item Class" max_length="40" name="x_bpin_net_atrium_item_class" type="collection">
+        <element label="Can Route IP" max_length="40" name="can_route_ip" type="boolean"/>
+        <element label="Class Name" max_length="40" name="class_name" type="string"/>
+        <element label="Item" max_length="40" name="item" type="string"/>
+    </element>
+</database>
